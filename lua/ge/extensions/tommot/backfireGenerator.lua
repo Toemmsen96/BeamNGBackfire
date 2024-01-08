@@ -9,7 +9,9 @@ local function ends_with(str, ending)
    return ending == "" or str:sub(-#ending) == ending
 end
 
-local json = require 'dkjson'  -- replace with your actual JSON library
+local json = require 'dkjson'  -- imports required json lib (see /lua/common/extensions/LICENSE.txt)
+
+
 local function readJsonFile(path)
     local file = io.open(path, "r")
     if not file then return nil end
@@ -28,7 +30,6 @@ local function writeJsonFile(path, data, compact)
 end
 
 
-
 local function getAllVehicles()
   local vehicles = {}
   for _, v in ipairs(FS:findFiles('/vehicles', '*', 0, false, true)) do
@@ -40,7 +41,7 @@ local function getAllVehicles()
 end
 
 local function getBackfireJbeamPath(vehicleDir)
-	local path = "/vehicles/" .. vehicleDir .. "/backfire/" .. vehicleDir .. "_backfire.jbeam"
+	local path = "/mods/unpacked/generatedBackfire/vehicles/" .. vehicleDir .. "/backfire/" .. vehicleDir .. "_backfire.jbeam"
 	return path
 end
 
