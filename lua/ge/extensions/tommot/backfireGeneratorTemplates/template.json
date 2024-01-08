@@ -1,9 +1,9 @@
 {
 	"information": {
 		"author": "TommoT",
-		"name": "Backfire"
+		"name": "Afterfire"
 	},
-	"version": 1.11,
+	"version": 1.0,
 	"slotType": "[MODSLOT]",
 	
 	"variables": [
