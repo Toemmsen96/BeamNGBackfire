@@ -124,17 +124,17 @@ end
 local function generate(vehicleDir)
 	local existingData = loadExistingBackfireData(vehicleDir)
 	if existingData ~= nil and existingData.version == templateVersion then
-		log('D', 'GELua.backfireGenerator.onExtensionLoaded', vehicleDir .. " up to date")
+		log('D', 'generate', vehicleDir .. " up to date")
 		return
 	else
-		log('D', 'GELua.backfireGenerator.onExtensionLoaded', vehicleDir .. " NOT up to date, updating")
+		log('D', 'generate', vehicleDir .. " NOT up to date, updating")
 	end
 	
 	local mainSlotData = loadMainSlot(vehicleDir)
 	if mainSlotData ~= nil and mainSlotData.slots ~= nil and type(mainSlotData.slots) == 'table' then
 		for _,slotType in pairs(getSlotTypes(mainSlotData.slots)) do
 			if ends_with(slotType, "_mod") then
-				log('D', 'GELua.backfireGenerator.onExtensionLoaded', "found mod slot: " .. slotType)
+				log('D', 'generate', "found mod slot: " .. slotType)
 				makeAndSaveNewTemplate(vehicleDir, slotType)
 			end
 		end
@@ -143,11 +143,11 @@ local function generate(vehicleDir)
 end
 
 local function generateAll()
-	log('D', 'GELua.backfireGenerator.onExtensionLoaded', "running generateAll()")
+	log('D', 'generateAll', "running generateAll()")
 	for _,veh in pairs(getAllVehicles()) do
 		generate(veh)
 	end
-	log('D', 'GELua.backfireGenerator.onExtensionLoaded', "done")
+	log('D', 'generateAll', "done")
 end
 
 local function loadTemplate()
@@ -165,6 +165,17 @@ local function onExtensionLoaded()
 		return
 	end
 	generateAll()
+end
+
+local function deleteTempFiles()
+	--delete all files in /mods/unpacked/generatedBackfire
+	local files = FS:findFiles("/mods/unpacked/generatedBackfire", "*", -1, true, false)
+	for _, file in ipairs(files) do
+		FS:removeFile(file)
+	end
+	for_, dir in ipairs(FS:findFiles("/mods/unpacked/generatedBackfire", "*", -1, false, true)) do
+		FS:removeDir(dir)
+	end
 end
 
 -- functions which should actually be exported
