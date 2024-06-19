@@ -139,6 +139,15 @@ local function generate(vehicleDir)
 			end
 		end
 	end
+	-- if not, try slots2 because this is the newer slot type
+	if mainSlotData ~= nil and mainSlotData.slots2 ~= nil and type(mainSlotData.slots2) == 'table' then
+		for _,slotType in pairs(getSlotTypes(mainSlotData.slots2)) do
+			if ends_with(slotType, "_mod") then
+				log('D', 'generate', "found mod slot: " .. slotType)
+				makeAndSaveNewTemplate(vehicleDir, slotType)
+			end
+		end
+	end
 	
 end
 
@@ -173,9 +182,7 @@ local function deleteTempFiles()
 	for _, file in ipairs(files) do
 		FS:removeFile(file)
 	end
-	for_, dir in ipairs(FS:findFiles("/mods/unpacked/generatedBackfire", "*", -1, false, true)) do
-		FS:removeDir(dir)
-	end
+	--TODO delete the folder itself
 end
 
 -- functions which should actually be exported
