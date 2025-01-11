@@ -6,6 +6,6 @@ https://www.beamng.com/resources/backfire-afterfire-mod-now-customizable.6475/
 If you use some of my code please link the original mod and add some credits.
 
 ## Credits
-Toemmsen96 / TommoT (BeamNG Forums Username) - initial Jbeam mod and modifying the lua to improve and make it standalone  
+Toemmsen96 / TommoT (BeamNG Forums Username) - Complete rework of the generation stuff and original Afterfire / Backfire mod. Creator of this Mod.    
 Dummiesman - initial code for generating jbeam files automatically  
-David Heiko Kolf - dkjson lua module: http://dkolf.de/dkjson-lua/  
+~~David Heiko Kolf - dkjson lua module: http://dkolf.de/dkjson-lua/~~ Only used in old versions of this mod  
