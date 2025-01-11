@@ -5,6 +5,10 @@ local template = nil
 local templateVersion = -1
 
 --helpers
+local function isEmptyOrWhitespace(str)
+    return str == nil or str:match("^%s*$") ~= nil
+end
+
 local function ends_with(str, ending)
    return ending == "" or str:sub(-#ending) == ending
 end
