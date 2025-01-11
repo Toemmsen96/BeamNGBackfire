@@ -9,24 +9,16 @@ local function ends_with(str, ending)
    return ending == "" or str:sub(-#ending) == ending
 end
 
-local json = require 'dkjson'  -- imports required json lib (see /lua/common/extensions/LICENSE.txt)
-
-
 local function readJsonFile(path)
-    local file = io.open(path, "r")
-    if not file then return nil end
-    local content = file:read("*a")
-    file:close()
-    return content and json.decode(content) or nil
+    if isEmptyOrWhitespace(path) then
+        log('E', 'readJsonFile', "path is empty")
+        return nil
+    end
+    return jsonReadFile(path)
 end
 
-local function writeJsonFile(path, data, compact)
-	local file = io.open(path, "w")
-	if not file then return nil end
-	local content = json.encode(data, { indent = not compact })
-	file:write(content)
-	file:close()
-	return true
+local function writeJsonFile(path, data, nice)
+    return jsonWriteFile(path, data, nice)
 end
 
 
@@ -160,7 +152,7 @@ local function generateAll()
 end
 
 local function loadTemplate()
-	template = readJsonFile("/lua/ge/extensions/tommot/backfireGeneratorTemplates/template.json")
+	template = readJsonFile("/modslotgenerator/Afterfire.json")
 	if template ~= nil then
 		templateVersion = template.version
 	end
