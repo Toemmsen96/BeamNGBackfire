@@ -21,8 +21,71 @@ local function readJsonFile(path)
     return jsonReadFile(path)
 end
 
+local function readJsonFileSafe(path)
+	if isEmptyOrWhitespace(path) then
+		log('E', 'readJsonFileSafe', "path is empty")
+		return nil
+	end
+	if not FS:fileExists(path) then
+		log('E', 'readJsonFileSafe', "file does not exist: " .. path)
+		return nil
+	end
+
+	local content = readFile(path)
+	if not content then
+		log('E', 'readJsonFileSafe', "failed to read file: " .. path)
+		return nil
+	end
+
+	local ok, data = pcall(json.decode, content)
+	if not ok then
+		log('E', 'readJsonFileSafe', "JSON decode error in " .. path .. ": " .. tostring(data))
+		return nil
+	end
+	if type(data) ~= 'table' then
+		log('E', 'readJsonFileSafe', "decoded JSON is not a table: " .. path)
+		return nil
+	end
+	return data
+end
+
 local function writeJsonFile(path, data, nice)
     return jsonWriteFile(path, data, nice)
+end
+
+local function writeFileAtomic(finalPath, data, compact)
+	local tempPath = finalPath .. ".tmp"
+
+	-- Validate payload by roundtripping a temp file first.
+	local tempWriteOk = writeJsonFile(tempPath, data, compact)
+	if not tempWriteOk then
+		log('E', 'writeFileAtomic', "failed to write temp file: " .. tempPath)
+		return false
+	end
+
+	local tempValidate = readJsonFileSafe(tempPath)
+	if tempValidate == nil then
+		log('E', 'writeFileAtomic', "temp validation failed: " .. tempPath)
+		FS:removeFile(tempPath)
+		return false
+	end
+
+	local finalWriteOk = writeJsonFile(finalPath, data, compact)
+	if not finalWriteOk then
+		log('E', 'writeFileAtomic', "failed to write final file: " .. finalPath)
+		FS:removeFile(tempPath)
+		return false
+	end
+
+	local finalValidate = readJsonFileSafe(finalPath)
+	if finalValidate == nil then
+		log('E', 'writeFileAtomic', "final validation failed: " .. finalPath)
+		FS:removeFile(tempPath)
+		return false
+	end
+
+	FS:removeFile(tempPath)
+	return true
 end
 
 
@@ -42,11 +105,19 @@ local function getBackfireJbeamPath(vehicleDir)
 end
 
 local function loadExistingBackfireData(vehicleDir)
-	return readJsonFile(getBackfireJbeamPath(vehicleDir))
+	local path = getBackfireJbeamPath(vehicleDir)
+	if not FS:fileExists(path) then
+		return nil
+	end
+	return readJsonFileSafe(path)
 end
 
 local function makeAndSaveNewTemplate(vehicleDir, slotName)
 	local templateCopy = deepcopy(template)
+	if templateCopy == nil then
+		log('E', 'makeAndSaveNewTemplate', "template copy failed for vehicle: " .. tostring(vehicleDir))
+		return
+	end
 	
 	--make main part
 	local mainPart = {}
@@ -56,7 +127,26 @@ local function makeAndSaveNewTemplate(vehicleDir, slotName)
 	
 	--save it
 	local savePath = getBackfireJbeamPath(vehicleDir)
-	writeJsonFile(savePath, mainPart, true)
+	FS:directoryCreate("/mods/unpacked/generatedBackfire/vehicles/" .. vehicleDir .. "/backfire/", true)
+	local writeOk = writeFileAtomic(savePath, mainPart, true)
+	if not writeOk then
+		log('E', 'makeAndSaveNewTemplate', "failed to save template: " .. savePath)
+		return
+	end
+	if not FS:fileExists(savePath) then
+		log('E', 'makeAndSaveNewTemplate', "write reported success but file is missing: " .. savePath)
+		return
+	end
+end
+
+local function findTemplateVersion(modslotJbeam)
+	if type(modslotJbeam) ~= 'table' then return nil end
+	for _, part in pairs(modslotJbeam) do
+		if type(part) == 'table' and part.version ~= nil then
+			return part.version
+		end
+	end
+	return nil
 end
 
 --part helpers
@@ -79,7 +169,7 @@ local function loadMainSlot(vehicleDir)
 	
 	if FS:fileExists(vehJbeamPath) then
 		-- load it!
-		vehicleJbeam = readJsonFile(vehJbeamPath)
+		vehicleJbeam = readJsonFileSafe(vehJbeamPath)
 		
 		-- is it valid?
 		local mainPartKey = findMainPart(vehicleJbeam)
@@ -92,12 +182,12 @@ local function loadMainSlot(vehicleDir)
 	local files = FS:findFiles("/vehicles/" .. vehicleDir, "*.jbeam", -1, true, false)
 	for _, file in ipairs(files) do
 		-- load it!
-		vehicleJbeam = readJsonFile(file)
+		vehicleJbeam = readJsonFileSafe(file)
 		
 		-- is it valid?
 		local mainPartKey = findMainPart(vehicleJbeam)
 		if mainPartKey ~= nil then
-			return mainPartKey
+			return vehicleJbeam[mainPartKey]
 		end
 	end
 	
@@ -116,33 +206,42 @@ local function getSlotTypes(slotTable)
 	return slotTypes
 end
 
+local function getModSlot(mainSlotData)
+	if mainSlotData ~= nil and mainSlotData.slots ~= nil and type(mainSlotData.slots) == 'table' then
+		for _, slotType in pairs(getSlotTypes(mainSlotData.slots)) do
+			if ends_with(slotType, "_mod") then
+				return slotType
+			end
+		end
+	end
+
+	if mainSlotData ~= nil and mainSlotData.slots2 ~= nil and type(mainSlotData.slots2) == 'table' then
+		for _, slotType in pairs(getSlotTypes(mainSlotData.slots2)) do
+			if ends_with(slotType, "_mod") then
+				return slotType
+			end
+		end
+	end
+
+	return nil
+end
+
 --generation stuff
 local function generate(vehicleDir)
 	local existingData = loadExistingBackfireData(vehicleDir)
-	if existingData ~= nil and existingData.version == templateVersion then
+	local existingVersion = findTemplateVersion(existingData)
+	if existingVersion ~= nil and existingVersion == templateVersion then
 		log('D', 'generate', vehicleDir .. " up to date")
 		return
 	else
-		log('D', 'generate', vehicleDir .. " NOT up to date, updating")
+		log('D', 'generate', vehicleDir .. " NOT up to date, updating (existingVersion=" .. tostring(existingVersion) .. ", templateVersion=" .. tostring(templateVersion) .. ")")
 	end
 	
 	local mainSlotData = loadMainSlot(vehicleDir)
-	if mainSlotData ~= nil and mainSlotData.slots ~= nil and type(mainSlotData.slots) == 'table' then
-		for _,slotType in pairs(getSlotTypes(mainSlotData.slots)) do
-			if ends_with(slotType, "_mod") then
-				log('D', 'generate', "found mod slot: " .. slotType)
-				makeAndSaveNewTemplate(vehicleDir, slotType)
-			end
-		end
-	end
-	-- if not, try slots2 because this is the newer slot type
-	if mainSlotData ~= nil and mainSlotData.slots2 ~= nil and type(mainSlotData.slots2) == 'table' then
-		for _,slotType in pairs(getSlotTypes(mainSlotData.slots2)) do
-			if ends_with(slotType, "_mod") then
-				log('D', 'generate', "found mod slot: " .. slotType)
-				makeAndSaveNewTemplate(vehicleDir, slotType)
-			end
-		end
+	local slotType = getModSlot(mainSlotData)
+	if slotType ~= nil then
+		log('D', 'generate', "found mod slot: " .. slotType)
+		makeAndSaveNewTemplate(vehicleDir, slotType)
 	end
 	
 end
@@ -156,9 +255,13 @@ local function generateAll()
 end
 
 local function loadTemplate()
-	template = readJsonFile("/modslotgenerator/Afterfire.json")
+	template = readJsonFileSafe("/modslotgenerator/Afterfire.json")
 	if template ~= nil then
 		templateVersion = template.version
+		if templateVersion == nil then
+			templateVersion = 1.0
+			template.version = templateVersion
+		end
 	end
 end
 
@@ -173,17 +276,16 @@ local function onExtensionLoaded()
 end
 
 local function deleteTempFiles()
-	--delete all files in /mods/unpacked/generatedBackfire
-	local files = FS:findFiles("/mods/unpacked/generatedBackfire", "*", -1, true, false)
+	-- only delete transient temp files, keep generated jbeams for next startup
+	local files = FS:findFiles("/mods/unpacked/generatedBackfire", "*.tmp", -1, true, false)
 	for _, file in ipairs(files) do
 		FS:removeFile(file)
 	end
-	--TODO delete the folder itself
 end
 
 -- functions which should actually be exported
 M.onExtensionLoaded = onExtensionLoaded
-M.onModDeactivated = onExtensionLoaded
+M.onModDeactivated = deleteTempFiles
 M.onModActivated = onExtensionLoaded
 M.onExit = deleteTempFiles
 
